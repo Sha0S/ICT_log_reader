@@ -1,5 +1,6 @@
-use std::{env, path::PathBuf};
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+use std::{env, path::PathBuf};
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 
