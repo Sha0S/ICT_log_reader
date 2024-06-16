@@ -7,6 +7,24 @@ use egui_extras::{Column, TableBuilder};
 mod logfile;
 use logfile::*;
 
+pub(crate) fn load_icon() -> egui::IconData {
+	let (icon_rgba, icon_width, icon_height) = {
+		let icon = include_bytes!("..\\icon.png");
+		let image = image::load_from_memory(icon)
+			.expect("Failed to open icon path")
+			.into_rgba8();
+		let (width, height) = image.dimensions();
+		let rgba = image.into_raw();
+		(rgba, width, height)
+	};
+	
+	egui::IconData {
+		rgba: icon_rgba,
+		width: icon_width,
+		height: icon_height,
+	}
+}
+
 fn main() {
     env_logger::init();
 
@@ -22,7 +40,9 @@ fn main() {
     let x = if log.report.is_empty() { 660.0 } else { 1000.0 };
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size(egui::Vec2 { x, y: 500.0 }),
+        viewport: egui::ViewportBuilder::default()
+        .with_inner_size(egui::Vec2 { x, y: 500.0 })
+        .with_icon(load_icon()),
         ..Default::default()
     };
 
