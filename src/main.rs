@@ -4,8 +4,9 @@ use std::{env, path::PathBuf};
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 
-mod logfile;
-use logfile::*;
+use ict_logfile::*;
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub(crate) fn load_icon() -> egui::IconData {
 	let (icon_rgba, icon_width, icon_height) = {
@@ -36,8 +37,8 @@ fn main() {
         panic!("File {} does not exist!", log_path.to_string_lossy());
     }
 
-    let log = LogFile::load_v2(&log_path).expect("Failed to load logfile!");
-    let x = if log.report.is_empty() { 660.0 } else { 1000.0 };
+    let log = LogFile::load(&log_path).expect("Failed to load logfile!");
+    let x = if log.has_report() { 1000.0 } else { 660.0 };
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -47,7 +48,7 @@ fn main() {
     };
 
     _ = eframe::run_native(
-        "ICT Log Reader",
+        &format!("ICT Log Reader ({VERSION})"),
         options,
         Box::new(|_| Box::new(IctLogReader::default(log))),
     );
@@ -62,7 +63,7 @@ struct IctLogReader {
 impl IctLogReader {
     fn default(log: LogFile) -> Self {
         IctLogReader {
-            failed_only: log.status != 0,
+            failed_only: log.get_status() != 0,
             search: String::new(),
             log,
         }
@@ -71,7 +72,7 @@ impl IctLogReader {
 
 impl eframe::App for IctLogReader {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if !self.log.report.is_empty() {
+        if self.log.has_report() {
             egui::SidePanel::right("Report")
                 .default_width(300.0)
                 .resizable(true)
@@ -80,7 +81,7 @@ impl eframe::App for IctLogReader {
                         .auto_shrink(false)
                         .show(ui, |ui| {
                             ui.add(
-                                egui::TextEdit::multiline(&mut self.log.report.as_str())
+                                egui::TextEdit::multiline(&mut self.log.get_report())
                                     .desired_width(f32::INFINITY),
                             );
                         });
@@ -90,31 +91,31 @@ impl eframe::App for IctLogReader {
         egui::TopBottomPanel::top("Board Data").show(ctx, |ui| {
             egui::Grid::new("board_stats").show(ui, |ui| {
                 ui.monospace("Fájl:");
-                ui.monospace(format!("{}", self.log.source.to_string_lossy()));
+                ui.monospace(format!("{}", self.log.get_source().to_string_lossy()));
                 ui.end_row();
 
                 ui.monospace("Termék:");
-                ui.monospace(&self.log.product_id);
+                ui.monospace(self.log.get_product_id());
                 ui.end_row();
 
                 ui.monospace("DMC:");
-                ui.monospace(&self.log.DMC);
+                ui.monospace(self.log.get_DMC());
                 ui.end_row();
 
                 ui.monospace("Fő DMC:");
-                ui.monospace(&self.log.DMC_mb);
+                ui.monospace(self.log.get_main_DMC());
                 ui.end_row();
 
                 ui.monospace("Teszt ideje:");
                 ui.monospace(format!(
                     "{} - {}",
-                    u64_to_string(self.log.time_start),
-                    u64_to_string(self.log.time_end)
+                    u64_to_string(self.log.get_time_start()),
+                    u64_to_string(self.log.get_time_end())
                 ));
                 ui.end_row();
 
                 ui.monospace("Eredmény:");
-                ui.monospace(format!("{} - {}", self.log.status, self.log.status_str));
+                ui.monospace(format!("{} - {}", self.log.get_status(), self.log.get_status_str()));
                 ui.end_row();
             });
 
@@ -157,13 +158,13 @@ impl eframe::App for IctLogReader {
                 .body(|body| {
                     let selected_tests: Vec<&Test> = self
                         .log
-                        .tests
+                        .get_tests()
                         .iter()
                         .filter(|f| {
                             if self.failed_only {
-                                f.name.contains(&self.search) && f.result.0 == BResult::Fail
+                                f.get_name().contains(&self.search) && f.get_result().0 == BResult::Fail
                             } else {
-                                f.name.contains(&self.search)
+                                f.get_name().contains(&self.search)
                             }
                         })
                         .collect();
@@ -173,16 +174,18 @@ impl eframe::App for IctLogReader {
                         let row_index = row.index();
                         if let Some(test) = selected_tests.get(row_index) {
                             row.col(|ui| {
-                                ui.label(&test.name);
-                            });
-                            row.col(|ui| {
-                                ui.label(test.result.0.print());
-                            });
-                            row.col(|ui| {
-                                ui.label(format!("{:+1.4E}", test.result.1));
+                                ui.label(test.get_name());
                             });
 
-                            match test.limits {
+                            let result = test.get_result();
+                            row.col(|ui| {
+                                ui.label(result.0.print());
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{:+1.4E}", result.1));
+                            });
+
+                            match test.get_limits() {
                                 TLimit::None => {}
                                 TLimit::Lim2(u, l) => {
                                     row.col(|ui| {
